@@ -11,3 +11,6 @@ pub mod ecdsa;
 
 #[cfg(feature = "ed25519")]
 pub mod ed25519;
+
+#[cfg(feature = "aleo-schnorr")]
+pub mod aleo_schnorr;
