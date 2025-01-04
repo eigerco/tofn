@@ -4,6 +4,8 @@ use crate::crypto_tools::message_digest::MessageDigest;
 use crate::sdk::api::TofnFatal;
 use rand::SeedableRng as _;
 use snarkos_account::Account;
+use snarkvm::prelude::ToFields;
+use snarkvm::prelude::Field;
 use snarkvm::prelude::{Network, PrivateKey, Signature};
 
 use crate::{
@@ -55,12 +57,11 @@ pub fn sign<N: Network>(
     signing_key: &KeyPair<N>,
     msg_to_sign: &MessageDigest,
 ) -> TofnResult<BytesVec> {
+    let message = aleo_encoded(msg_to_sign).map_err(|_| TofnFatal)?;
+
     let sign = signing_key
         .aleo_account
-        .sign_bytes(
-            msg_to_sign.as_ref(),
-            &mut rand_chacha::ChaChaRng::from_entropy(),
-        )
+        .sign(&message, &mut rand_chacha::ChaChaRng::from_entropy())
         .map_err(|_| TofnFatal)?;
 
     Ok(sign.to_string().as_bytes().to_vec())
@@ -69,20 +70,41 @@ pub fn sign<N: Network>(
 pub fn verify<N: Network>(
     address: &str,
     signature: &Signature<N>,
-    message: &[u8],
+    message: &MessageDigest,
 ) -> TofnResult<bool> {
     use snarkvm::prelude::Address;
 
+    let message = aleo_encoded(message).map_err(|_| TofnFatal)?;
+
     let address = Address::from_str(address).map_err(|_| TofnFatal)?;
 
-    Ok(signature.verify_bytes(&address, message))
+    Ok(signature.verify(&address, &message))
+}
+
+fn aleo_encoded<N: Network>(data: &MessageDigest) -> TofnResult<Vec<Field<N>>> {
+    let message = [
+        "[",
+        data.as_ref()
+            .iter()
+            .map(|b| format!("{:?}u8", b))
+            .collect::<Vec<_>>()
+            .join(", ")
+            .as_str(),
+        "]",
+    ]
+    .concat();
+
+    snarkvm::prelude::Value::from_str(message.as_str())
+        .map_err(|_| TofnFatal)?
+        .to_fields()
+        .map_err(|_| TofnFatal)
 }
 
 #[cfg(test)]
 mod tests {
     use std::str::FromStr as _;
 
-    use super::{keygen, sign, verify, Signature};
+    use super::*;
     use crate::sdk::{
         api::MessageDigest,
         key::{dummy_secret_recovery_key, SecretRecoveryKey},
@@ -95,18 +117,23 @@ mod tests {
         let message = [42; 32].into();
 
         let key_pair = keygen::<CurrentNetwork>(&dummy_secret_recovery_key(42), b"tofn nonce")
-            .map_err(|_| TofnFatal)?;
-        let encoded_signature = sign(&key_pair, &message).map_err(|_| TofnFatal)?;
+            .map_err(|_| TofnFatal)
+            .unwrap();
+        let encoded_signature = sign(&key_pair, &message).map_err(|_| TofnFatal).unwrap();
         let signature = Signature::<CurrentNetwork>::from_str(
-            &String::from_utf8(encoded_signature).map_err(|_| TofnFatal)?,
+            &String::from_utf8(encoded_signature)
+                .map_err(|_| TofnFatal)
+                .unwrap(),
         )
-        .map_err(|_| TofnFatal)?;
+        .map_err(|_| TofnFatal)
+        .unwrap();
         let success = verify(
             key_pair.encoded_verifying_key().as_str(),
             &signature,
-            message.as_ref(),
+            &message,
         )
-        .map_err(|_| TofnFatal)?;
+        .map_err(|_| TofnFatal)
+        .unwrap();
 
         assert!(success);
     }
