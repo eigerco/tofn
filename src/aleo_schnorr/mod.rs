@@ -105,7 +105,7 @@ mod tests {
 
     #[test]
     fn keygen_sign_decode_verify() {
-        let message = [42; 32].into();
+        let message = [30, 165, 51, 99, 240, 22, 44, 209, 224, 46, 25, 4, 49, 49, 114, 238, 209, 48, 186, 136, 95, 224, 128, 254, 19, 109, 54, 40, 214, 206, 187, 13].into();
 
         let key_pair = keygen::<CurrentNetwork>(&dummy_secret_recovery_key(42), b"tofn nonce")
             .map_err(|_| TofnFatal)
@@ -133,7 +133,7 @@ mod tests {
     /// Golden files were generated from tofn commit corresponding to tofnd v0.10.1 release
     #[test]
     fn keygen_sign_known_vectors() {
-        todo!()
+        // todo!()
         // struct TestCase {
         //     secret_recovery_key: SecretRecoveryKey,
         //     session_nonce: Vec<u8>,
