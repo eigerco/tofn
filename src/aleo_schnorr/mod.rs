@@ -82,17 +82,8 @@ pub fn verify<N: Network>(
 }
 
 fn aleo_encoded<N: Network>(data: &MessageDigest) -> TofnResult<Vec<Field<N>>> {
-    let message = [
-        "[",
-        data.as_ref()
-            .iter()
-            .map(|b| format!("{:?}u8", b))
-            .collect::<Vec<_>>()
-            .join(", ")
-            .as_str(),
-        "]",
-    ]
-    .concat();
+    let num = cosmwasm_std::Uint256::from_le_bytes(data.0);
+    let message = format!("{num}group");
 
     snarkvm::prelude::Value::from_str(message.as_str())
         .map_err(|_| TofnFatal)?
