@@ -72,7 +72,7 @@ pub fn verify<N: Network>(
 ) -> TofnResult<bool> {
     use snarkvm::prelude::Address;
 
-    let message = aleo_encoded(message).map_err(|_| TofnFatal)?;
+    let message = aleo_encoded(message)?;
 
     let address = Address::from_str(address).map_err(|_| TofnFatal)?;
 
@@ -132,7 +132,6 @@ mod tests {
     /// Check keygen/signing outputs against golden files to catch regressions (such as on updating deps).
     /// Golden files were generated from tofn commit corresponding to tofnd v0.10.1 release
     #[test]
-    fn keygen_sign_known_vectors() {
-        // todo!()
-    }
+    #[ignore = "not yet implemented"]
+    fn keygen_sign_known_vectors() {}
 }
