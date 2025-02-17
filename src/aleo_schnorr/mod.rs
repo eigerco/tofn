@@ -4,9 +4,7 @@ use crate::crypto_tools::message_digest::MessageDigest;
 use crate::sdk::api::TofnFatal;
 use rand::SeedableRng as _;
 use snarkos_account::Account;
-use snarkvm::prelude::ToFields;
-use snarkvm::prelude::Field;
-use snarkvm::prelude::{Network, PrivateKey, Signature};
+use snarkvm::prelude::{Field, Network, PrivateKey, Signature, ToFields};
 
 use crate::{
     constants::ALEO_SCHNORRR_TAG,
@@ -82,7 +80,8 @@ pub fn verify<N: Network>(
 }
 
 fn aleo_encoded<N: Network>(data: &MessageDigest) -> TofnResult<Vec<Field<N>>> {
-    let num = cosmwasm_std::Uint256::from_le_bytes(data.0);
+    let data = data.as_ref().try_into().map_err(|_| TofnFatal)?;
+    let num = cosmwasm_std::Uint256::from_le_bytes(data);
     let message = format!("{num}group");
 
     snarkvm::prelude::Value::from_str(message.as_str())
@@ -96,16 +95,17 @@ mod tests {
     use std::str::FromStr as _;
 
     use super::*;
-    use crate::sdk::{
-        api::MessageDigest,
-        key::{dummy_secret_recovery_key, SecretRecoveryKey},
-    };
+    use crate::sdk::key::dummy_secret_recovery_key;
 
     pub type CurrentNetwork = snarkvm::prelude::TestnetV0;
 
     #[test]
     fn keygen_sign_decode_verify() {
-        let message = [30, 165, 51, 99, 240, 22, 44, 209, 224, 46, 25, 4, 49, 49, 114, 238, 209, 48, 186, 136, 95, 224, 128, 254, 19, 109, 54, 40, 214, 206, 187, 13].into();
+        let message = [
+            30, 165, 51, 99, 240, 22, 44, 209, 224, 46, 25, 4, 49, 49, 114, 238, 209, 48, 186, 136,
+            95, 224, 128, 254, 19, 109, 54, 40, 214, 206, 187, 13,
+        ]
+        .into();
 
         let key_pair = keygen::<CurrentNetwork>(&dummy_secret_recovery_key(42), b"tofn nonce")
             .map_err(|_| TofnFatal)
@@ -134,51 +134,5 @@ mod tests {
     #[test]
     fn keygen_sign_known_vectors() {
         // todo!()
-        // struct TestCase {
-        //     secret_recovery_key: SecretRecoveryKey,
-        //     session_nonce: Vec<u8>,
-        //     message_digest: [u8; 32],
-        // }
-        //
-        // let test_cases = vec![
-        //     TestCase {
-        //         secret_recovery_key: SecretRecoveryKey([0; 64]),
-        //         session_nonce: vec![0; 4],
-        //         message_digest: [42; 32],
-        //     },
-        //     TestCase {
-        //         secret_recovery_key: SecretRecoveryKey([0xff; 64]),
-        //         session_nonce: vec![0xff; 32],
-        //         message_digest: [0xff; 32],
-        //     },
-        // ];
-        //
-        // let expected_outputs: Vec<Vec<_>> = test_cases
-        //     .into_iter()
-        //     .map(|test_case| {
-        //         let keypair =
-        //             keygen(&test_case.secret_recovery_key, &test_case.session_nonce).map_err(|_| TofnFatal)?;
-        //         let encoded_signing_key = keypair.signing_key().as_ref().to_bytes().to_vec();
-        //         let encoded_verifying_key = keypair.encoded_verifying_key().to_vec();
-        //
-        //         let signature: Vec<u8> =
-        //             sign(keypair.signing_key(), &test_case.message_digest.into()).map_err(|_| TofnFatal)?;
-        //
-        //         let success = verify(
-        //             &keypair.encoded_verifying_key(),
-        //             &test_case.message_digest.into(),
-        //             &signature,
-        //         )
-        //         .map_err(|_| TofnFatal)?;
-        //         assert!(success);
-        //
-        //         [encoded_signing_key, encoded_verifying_key, signature]
-        //             .into_iter()
-        //             .map(hex::encode)
-        //             .collect()
-        //     })
-        //     .collect();
-        //
-        // goldie::assert_json!(expected_outputs);
     }
 }
