@@ -45,8 +45,14 @@ pub fn keygen<N: Network>(
         session_nonce,
     )?;
 
-    let private_key = PrivateKey::new(&mut rng).map_err(|_| TofnFatal)?;
-    let aleo_account = Account::try_from(private_key).map_err(|_| TofnFatal)?;
+    let private_key = PrivateKey::new(&mut rng).map_err(|_| {
+        error!("Keygen failure to generate Aleo private key.");
+        TofnFatal
+    })?;
+    let aleo_account = Account::try_from(private_key).map_err(|_| {
+        error!("Keygen failure to generate Aleo account.");
+        TofnFatal
+    })?;
 
     Ok(KeyPair { aleo_account })
 }
@@ -55,12 +61,18 @@ pub fn sign<N: Network>(
     signing_key: &KeyPair<N>,
     msg_to_sign: &MessageDigest,
 ) -> TofnResult<BytesVec> {
-    let message = aleo_encoded(msg_to_sign).map_err(|_| TofnFatal)?;
+    let message = aleo_encoded(msg_to_sign).map_err(|_| {
+        error!("Failed to sign message.");
+        TofnFatal
+    })?;
 
     let sign = signing_key
         .aleo_account
         .sign(&message, &mut rand_chacha::ChaChaRng::from_entropy())
-        .map_err(|_| TofnFatal)?;
+        .map_err(|_| {
+            error!("Faild to sign message.");
+            TofnFatal
+        })?;
 
     Ok(sign.to_string().as_bytes().to_vec())
 }
@@ -72,22 +84,37 @@ pub fn verify<N: Network>(
 ) -> TofnResult<bool> {
     use snarkvm::prelude::Address;
 
-    let message = aleo_encoded(message)?;
+    let message = aleo_encoded(message).map_err(|_| {
+        error!("Failed to verify message.");
+        TofnFatal
+    })?;
 
-    let address = Address::from_str(address).map_err(|_| TofnFatal)?;
+    let address = Address::from_str(address).map_err(|_| {
+        error!("Failed to create Aleo address. Failed to verify signature.");
+        TofnFatal
+    })?;
 
     Ok(signature.verify(&address, &message))
 }
 
 fn aleo_encoded<N: Network>(data: &MessageDigest) -> TofnResult<Vec<Field<N>>> {
-    let data = data.as_ref().try_into().map_err(|_| TofnFatal)?;
+    let data = data.as_ref().try_into().map_err(|_| {
+        error!("Failed to get MessageDigest as slice.");
+        TofnFatal
+    })?;
     let num = cosmwasm_std::Uint256::from_le_bytes(data);
     let message = format!("{num}group");
 
     snarkvm::prelude::Value::from_str(message.as_str())
-        .map_err(|_| TofnFatal)?
+        .map_err(|_| {
+            error!("Failed to create Aleo value.");
+            TofnFatal
+        })?
         .to_fields()
-        .map_err(|_| TofnFatal)
+        .map_err(|_| {
+            error!("Failed to transale value to fields.");
+            TofnFatal
+        })
 }
 
 #[cfg(test)]
