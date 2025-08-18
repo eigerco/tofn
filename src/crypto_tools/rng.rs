@@ -76,6 +76,29 @@ pub(crate) fn rng_seed_ecdsa_ephemeral_scalar(
     Ok(ChaCha20Rng::from_seed(seed))
 }
 
+/// Initialize a deterministic k value for STARK signatures using Poseidon hash.
+/// Using Poseidon ensures the result is natively a valid Felt without bit manipulation.
+/// Provides additional entropy.
+#[cfg(feature = "stark")]
+pub(crate) fn rng_seed_stark_ephemeral_k(
+    protocol_tag: u8,
+    tag: u8,
+    signing_key: &starknet_crypto::Felt,
+    message_hash: &starknet_crypto::Felt,
+) -> TofnResult<starknet_crypto::Felt> {
+    let protocol_tag_felt = starknet_crypto::Felt::from(protocol_tag as u64);
+    let tag_felt = starknet_crypto::Felt::from(tag as u64);
+
+    let domain_separated_k = starknet_crypto::poseidon_hash_many(&[
+        protocol_tag_felt,
+        tag_felt,
+        *signing_key,
+        *message_hash,
+    ]);
+
+    Ok(domain_separated_k)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{
