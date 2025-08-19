@@ -40,7 +40,7 @@ ed25519-dalek = { version = "2.1", features = [
     "rand_core",
     "zeroize",
     "asm",
-], default_features = false, optional = true }
+], default-features = false, optional = true }
 
 # Aleo Schnorr deps
 snarkvm = { version = "3.7.0", optional = true }
@@ -67,7 +67,7 @@ panic = "unwind"
 panic = "unwind"
 
 [features]
-default = ["secp256k1", "ed25519"]
+default = ["secp256k1", "ed25519", "aleo-schnorr"]
 secp256k1 = ["dep:ecdsa", "dep:k256", "dep:crypto-bigint"]
 ed25519 = ["dep:ed25519", "dep:ed25519-dalek"]
 aleo-schnorr = ["dep:snarkvm", "dep:snarkos-account", "dep:cosmwasm-std"]
