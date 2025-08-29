@@ -2,7 +2,10 @@ use crate::crypto_tools::message_digest::MessageDigest;
 use crate::sdk::api::TofnFatal;
 use rand::SeedableRng as _;
 use snarkos_account::Account;
-use snarkvm::prelude::{Address, FromBytes, Network, PrivateKey, Signature, SizeInBytes, ToBytes};
+use snarkvm::prelude::{
+    Address, Field, FromBytes, Group, Network, PrivateKey, Signature, SizeInBytes, ToBytes,
+    ToFields as _,
+};
 use tracing::error;
 
 use crate::{
@@ -67,14 +70,12 @@ pub fn keygen<N: Network>(
         session_nonce,
     )?;
 
-    let private_key = PrivateKey::new(&mut rng).map_err(|_| {
-        error!("Keygen failure to generate Aleo private key.");
-        TofnFatal
-    })?;
-    let aleo_account = Account::try_from(private_key).map_err(|_| {
-        error!("Keygen failure to generate Aleo account.");
-        TofnFatal
-    })?;
+    let aleo_account = PrivateKey::new(&mut rng)
+        .and_then(Account::try_from)
+        .map_err(|_| {
+            error!("Keygen failure to generate Aleo account.");
+            TofnFatal
+        })?;
 
     Ok(KeyPair { aleo_account })
 }
@@ -95,9 +96,18 @@ pub fn sign_with_rng<N: Network, R: rand::Rng + rand::CryptoRng>(
     msg_to_sign: &MessageDigest,
     rng: &mut R,
 ) -> TofnResult<BytesVec> {
+    let group_value = Group::from_bytes_le(msg_to_sign.as_ref()).map_err(|_| {
+        error!("Failed to create Aleo group value. Failed to sign message.");
+        TofnFatal
+    })?;
+    let group_to_fields = <Group<N>>::to_fields(&group_value).map_err(|_| {
+        error!("Failed to convert Aleo group value to fields. Failed to sign message.");
+        TofnFatal
+    })?;
+
     signing_key
         .aleo_account
-        .sign_bytes(msg_to_sign.as_ref(), rng)
+        .sign(&group_to_fields, rng)
         .and_then(|signature| signature.to_bytes_le())
         .map_err(|_| {
             error!("Failed to sign message and convert to bytes");
@@ -115,7 +125,16 @@ pub fn verify<N: Network>(
         TofnFatal
     })?;
 
-    Ok(signature.verify_bytes(&address, message.as_ref()))
+    let group_value = Group::from_bytes_le(message.as_ref()).map_err(|_| {
+        error!("Failed to create Aleo group value. Failed to sign message.");
+        TofnFatal
+    })?;
+    let group_to_fields = <Group<N>>::to_fields(&group_value).map_err(|_| {
+        error!("Failed to convert Aleo group value to fields. Failed to sign message.");
+        TofnFatal
+    })?;
+
+    Ok(signature.verify(&address, &group_to_fields))
 }
 
 #[cfg(test)]
@@ -169,12 +188,18 @@ mod tests {
             TestCase {
                 secret_recovery_key: SecretRecoveryKey([0; 64]),
                 session_nonce: vec![0; 4],
-                message_digest: [42; 32],
+                message_digest: [
+                    2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0
+                ],
             },
             TestCase {
                 secret_recovery_key: SecretRecoveryKey([0xff; 64]),
                 session_nonce: vec![0xff; 32],
-                message_digest: [0xff; 32],
+                message_digest: [
+                    112, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0
+                ],
             },
         ];
 
