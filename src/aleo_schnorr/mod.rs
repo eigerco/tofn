@@ -2,10 +2,10 @@ use crate::crypto_tools::message_digest::MessageDigest;
 use crate::sdk::api::TofnFatal;
 use rand::SeedableRng as _;
 use snarkos_account::Account;
-use snarkvm::prelude::{
-    Address, Field, FromBytes, Group, Network, PrivateKey, Signature, SizeInBytes, ToBytes,
-    ToFields as _,
-};
+use snarkvm_console::account::{PrivateKey, Signature};
+use snarkvm_console::prelude::{FromBytes, Network, SizeInBytes, ToBytes, ToFields};
+use snarkvm_console::types::{Address, Group};
+
 use tracing::error;
 
 use crate::{
@@ -141,7 +141,8 @@ pub fn verify<N: Network>(
 mod tests {
     use super::*;
 
-    pub type CurrentNetwork = snarkvm::prelude::TestnetV0;
+    pub type CurrentNetwork = snarkvm_console::network::TestnetV0;
+    // pub type CurrentNetwork = snarkvm_console_network::TestnetV0;
 
     pub fn dummy_keygen<N: Network>() -> TofnResult<KeyPair<N>> {
         keygen::<N>(
@@ -190,7 +191,7 @@ mod tests {
                 session_nonce: vec![0; 4],
                 message_digest: [
                     2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0
+                    0, 0, 0, 0, 0, 0,
                 ],
             },
             TestCase {
@@ -198,7 +199,7 @@ mod tests {
                 session_nonce: vec![0xff; 32],
                 message_digest: [
                     112, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0
+                    0, 0, 0, 0, 0, 0,
                 ],
             },
         ];
