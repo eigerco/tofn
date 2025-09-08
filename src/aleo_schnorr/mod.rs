@@ -1,10 +1,44 @@
+//! # Aleo Schnorr Signature Module
+//!
+//! This module provides Schnorr signatures specifically designed for compatibility with
+//! Leo programs and the Aleo blockchain's zero-knowledge proof system.
+//!
+//! ## Leo Program Compatibility
+//!
+//! The core design follows Aleo's data transformation requirements:
+//! **Raw Bytes (32) → Group<N> → Value<N> → Fields → Signature**
+//!
+//! ### Why This Transformation Chain?
+//!
+//! 1. **Group Elements**: At Leo programs we use `hash_to_group()` which produces Group<N> elements.
+//!    Both Groups and MessageDigests are exactly 32 bytes, enabling direct conversion.
+//!    This ensures `msg_to_sign` work with Leo's native hashing operations.
+//!
+//! 2. **Value<N> Wrapper**: Leo's type system requires all data as Value<N> for:
+//!
+//! 3. **Field Serialization**: snarkVM provides signatures over field elements.
+//!
+//! This transformation ensures signatures generated here can be directly verified
+//! in Leo programs.
+//!
+//! ## Example Leo Integration
+//!
+//! ```leo
+//! program verify_signature.aleo {
+//!     transition verify(message: group, signature: signature, addr: address) -> bool {
+//!         return signature.verify(addr, message);
+//!     }
+//! }
+//! ```
+
 use crate::crypto_tools::message_digest::MessageDigest;
 use crate::sdk::api::TofnFatal;
 use rand::SeedableRng as _;
 use snarkos_account::Account;
 use snarkvm_console::account::{PrivateKey, Signature};
 use snarkvm_console::prelude::{FromBytes, Network, SizeInBytes, ToBytes, ToFields};
-use snarkvm_console::types::{Address, Group};
+use snarkvm_console::program::{Literal, Value};
+use snarkvm_console::types::{Address, Field, Group};
 
 use tracing::error;
 
@@ -20,15 +54,17 @@ use crate::{
 /// Length of the Aleo address in bytes
 const PUBLIC_KEY_LENGTH: usize = 32;
 
+/// Aleo key pair wrapper around SnarkVM's Account type.
 #[derive(Debug)]
 pub struct KeyPair<N: Network> {
     aleo_account: Account<N>,
 }
 
 impl<N: Network> KeyPair<N> {
-    /// tofnd needs to store this in the kv store.
+    /// Returns the private key for signing operations.
+    /// Should be stored securely in tofnd's key-value store.
     pub fn signing_key(&self) -> &PrivateKey<N> {
-        &self.aleo_account.private_key()
+        self.aleo_account.private_key()
     }
 
     pub fn encoded_verifying_key(&self) -> TofnResult<[u8; PUBLIC_KEY_LENGTH]> {
@@ -41,18 +77,15 @@ impl<N: Network> KeyPair<N> {
             return Err(TofnFatal);
         }
 
-        self.aleo_account
-            .address()
-            .to_bytes_le()
-            .map_err(|_| {
-                error!("Failed to encode Aleo address.");
-                TofnFatal
-            })?
-            .try_into()
-            .map_err(|_| {
-                error!("Failed to convert Aleo address to bytes.");
-                TofnFatal
-            })
+        let bytes = self.aleo_account.address().to_bytes_le().map_err(|_| {
+            error!("Failed to encode Aleo address");
+            TofnFatal
+        })?;
+
+        bytes.try_into().map_err(|_| {
+            error!("Failed to convert address to byte array");
+            TofnFatal
+        })
     }
 }
 
@@ -80,6 +113,9 @@ pub fn keygen<N: Network>(
     Ok(KeyPair { aleo_account })
 }
 
+/// Signs a message using system entropy for nonce generation.
+///
+/// Follows the Leo-compatible transformation: bytes → Group → Value → Fields → Signature.
 pub fn sign<N: Network>(
     signing_key: &KeyPair<N>,
     msg_to_sign: &MessageDigest,
@@ -91,23 +127,24 @@ pub fn sign<N: Network>(
     )
 }
 
+/// Signs a message with provided RNG for deterministic signatures (useful for testing).
+///
+/// Performs the Leo-compatible transformation chain:
+/// 1. MessageDigest (32 bytes) → Group<N> (32 bytes) - direct conversion
+/// 2. Group → Literal::Group - wrap in Leo's type system
+/// 3. Literal → Value<N> - Leo's unified data representation
+/// 4. Value → Fields
+/// 5. Sign field elements - generate final signature
 pub fn sign_with_rng<N: Network, R: rand::Rng + rand::CryptoRng>(
     signing_key: &KeyPair<N>,
     msg_to_sign: &MessageDigest,
     rng: &mut R,
 ) -> TofnResult<BytesVec> {
-    let group_value = Group::from_bytes_le(msg_to_sign.as_ref()).map_err(|_| {
-        error!("Failed to create Aleo group value. Failed to sign message.");
-        TofnFatal
-    })?;
-    let group_to_fields = <Group<N>>::to_fields(&group_value).map_err(|_| {
-        error!("Failed to convert Aleo group value to fields. Failed to sign message.");
-        TofnFatal
-    })?;
+    let msg_fields = msg_to_fields::<N>(msg_to_sign)?;
 
     signing_key
         .aleo_account
-        .sign(&group_to_fields, rng)
+        .sign(&msg_fields, rng)
         .and_then(|signature| signature.to_bytes_le())
         .map_err(|_| {
             error!("Failed to sign message and convert to bytes");
@@ -115,6 +152,10 @@ pub fn sign_with_rng<N: Network, R: rand::Rng + rand::CryptoRng>(
         })
 }
 
+/// Verifies a signature by applying the same transformation chain as signing.
+///
+/// Ensures compatibility with Leo program verification by using identical
+/// bytes → Group → Value → Fields conversion.
 pub fn verify<N: Network>(
     address: &[u8],
     message: &MessageDigest,
@@ -125,16 +166,21 @@ pub fn verify<N: Network>(
         TofnFatal
     })?;
 
-    let group_value = Group::from_bytes_le(message.as_ref()).map_err(|_| {
-        error!("Failed to create Aleo group value. Failed to sign message.");
-        TofnFatal
-    })?;
-    let group_to_fields = <Group<N>>::to_fields(&group_value).map_err(|_| {
-        error!("Failed to convert Aleo group value to fields. Failed to sign message.");
+    let msg_fields = msg_to_fields::<N>(message)?;
+    Ok(signature.verify(&address, &msg_fields))
+}
+
+fn msg_to_fields<N: Network>(msg: &MessageDigest) -> TofnResult<Vec<Field<N>>> {
+    let group_value = Group::from_bytes_le(msg.as_ref()).map_err(|_| {
+        error!("Failed to create Aleo group value for msg.");
         TofnFatal
     })?;
 
-    Ok(signature.verify(&address, &group_to_fields))
+    let value = Value::from(Literal::Group(group_value));
+    value.to_fields().map_err(|_| {
+        error!("Failed to convert Aleo group value to fields.");
+        TofnFatal
+    })
 }
 
 #[cfg(test)]
@@ -142,7 +188,6 @@ mod tests {
     use super::*;
 
     pub type CurrentNetwork = snarkvm_console::network::TestnetV0;
-    // pub type CurrentNetwork = snarkvm_console_network::TestnetV0;
 
     pub fn dummy_keygen<N: Network>() -> TofnResult<KeyPair<N>> {
         keygen::<N>(

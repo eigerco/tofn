@@ -41,8 +41,9 @@ ed25519-dalek = { version = "2.1", features = [
 snarkvm-console = { version = "4.1.0", optional = true, default-features = false, features = [
     "account",
     "network",
-    "types"
-]  }
+    "program",
+    "types",
+] }
 snarkos-account = { version = "4.1.0", optional = true }
 
 # logging
@@ -68,7 +69,4 @@ panic = "unwind"
 default = ["secp256k1", "ed25519", "aleo-schnorr"]
 secp256k1 = ["dep:ecdsa", "dep:k256", "dep:crypto-bigint"]
 ed25519 = ["dep:ed25519", "dep:ed25519-dalek"]
-aleo-schnorr = [
-    "dep:snarkvm-console",
-    "dep:snarkos-account",
-]
+aleo-schnorr = ["dep:snarkvm-console", "dep:snarkos-account"]
