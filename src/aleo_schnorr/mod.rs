@@ -14,7 +14,7 @@
 //!    Both Groups and MessageDigests are exactly 32 bytes, enabling direct conversion.
 //!    This ensures `msg_to_sign` work with Leo's native hashing operations.
 //!
-//! 2. **Value<N> Wrapper**: Leo's type system requires all data as Value<N> for:
+//! 2. **Value<N> Wrapper**: Leo's type system requires all data as Value<N>.
 //!
 //! 3. **Field Serialization**: snarkVM provides signatures over field elements.
 //!
