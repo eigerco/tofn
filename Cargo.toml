@@ -38,7 +38,7 @@ ed25519-dalek = { version = "2.1", features = [
 ], default-features = false, optional = true }
 
 # Aleo Schnorr deps
-snarkvm-console = { git = "https://github.com/eigerco/snarkVM", branch = "cosmwasm-5", optional = true, default-features = false, features = [
+snarkvm-console = { git = "https://github.com/eigerco/snarkVM", tag = "snarkvm-with-cosmwasm", optional = true, default-features = false, features = [
     "account",
     "network",
     "program",
@@ -73,4 +73,4 @@ aleo-schnorr = ["dep:snarkvm-console", "dep:snarkos-account"]
 
 [patch.crates-io]
 # Use our fork of snarkVM so we use the same snarkVM code in axelar-aleo and axelar-amplifier.
-snarkvm = { git = "https://github.com/eigerco/snarkVM", branch = "cosmwasm-5" }
+snarkvm = { git = "https://github.com/eigerco/snarkVM", tag = "snarkvm-with-cosmwasm" }
