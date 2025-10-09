@@ -3,6 +3,7 @@ use rand::{CryptoRng, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use sha2::Sha256;
 use tracing::error;
+#[cfg(feature = "secp256k1")]
 use zeroize::Zeroize;
 
 use crate::sdk::{
@@ -76,7 +77,7 @@ pub(crate) fn rng_seed_ecdsa_ephemeral_scalar(
     Ok(ChaCha20Rng::from_seed(seed))
 }
 
-#[cfg(test)]
+#[cfg(all(test, any(feature = "secp256k1", feature = "ed25519")))]
 mod tests {
     use crate::{
         crypto_tools::{
